@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>泰文單字測驗</title>
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6C5CE7;
+            --secondary: #A29BFE;
+            --accent: #00CEC9;
+            --bg: #DFE6E9;
+            --card-bg: #FFFFFF;
+            --text: #2D3436;
+            --correct: #00B894;
+            --wrong: #FF7675;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+            background-color: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .app-container {
+            background: var(--card-bg);
+            width: 100%;
+            max-width: 400px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            overflow: hidden;
+            position: relative;
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-weight: bold;
+            position: relative;
+        }
+
+        .score-badge {
+            position: absolute;
+            right: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(255,255,255,0.2);
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 0.9rem;
+        }
+
+        /* Screens */
+        .screen {
+            flex: 1;
+            padding: 30px 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            transition: opacity 0.3s ease;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* Start Screen */
+        .hero-emoji {
+            font-size: 5rem;
+            margin-bottom: 20px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        h1 {
+            margin: 0 0 10px 0;
+            color: var(--primary);
+        }
+
+        p {
+            color: #636e72;
+            line-height: 1.6;
+        }
+
+        /* Quiz Screen */
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: #eee;
+            margin-bottom: 20px;
+            border-radius: 3px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--accent);
+            width: 0%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .question-card {
+            background: #F8F9FA;
+            width: 100%;
+            padding: 30px 10px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #eee;
+        }
+
+        .thai-word {
+            font-family: 'Sarabun', sans-serif;
+            font-size: 3.5rem;
+            color: var(--primary);
+            font-weight: 700;
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            width: 100%;
+        }
+
+        .option-btn {
+            background: white;
+            border: 2px solid #dfe6e9;
+            padding: 15px 5px;
+            border-radius: 12px;
+            font-size: 1rem;
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .option-btn:hover:not([disabled]) {
+            border-color: var(--secondary);
+            background: #fefefe;
+            transform: translateY(-2px);
+        }
+
+        .option-btn.correct {
+            background: var(--correct);
+            border-color: var(--correct);
+            color: white;
+        }
+
+        .option-btn.wrong {
+            background: var(--wrong);
+            border-color: var(--wrong);
+            color: white;
+            opacity: 0.6;
+        }
+
+        /* Result Screen */
+        .result-score {
+            font-size: 4rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin: 10px 0;
+        }
+
+        .result-comment {
+            font-size: 1.2rem;
+            margin-bottom: 30px;
+            font-weight: bold;
+        }
+
+        /* Common Buttons */
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(108, 92, 231, 0.3);
+            transition: transform 0.2s;
+            font-weight: bold;
+        }
+
+        .btn-primary:active {
+            transform: scale(0.95);
+        }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+
+        /* Feedback Text */
+        .feedback-msg {
+            height: 20px;
+            margin-top: 10px;
+            font-weight: bold;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            Thai Quiz 🇹🇭
+            <div class="score-badge">💎 <span id="score-display">0</span></div>
+        </header>
+
+        <div id="start-screen" class="screen">
+            <div class="hero-emoji">🐘</div>
+            <h1>泰文單字挑戰</h1>
+            <p>每天練習 5 個單字<br>輕鬆學會泰語基礎！</p>
+            <button class="btn-primary" onclick="game.start()">開始挑戰</button>
+        </div>
+
+        <div id="quiz-screen" class="screen hidden">
+            <div class="progress-bar">
+                <div id="progress-fill" class="progress-fill"></div>
+            </div>
+            
+            <div class="question-card">
+                <div class="thai-word" id="q-word">...</div>
+            </div>
+
+            <div class="options-grid" id="options-container">
+                </div>
+            <div id="feedback-msg" class="feedback-msg"></div>
+        </div>
+
+        <div id="result-screen" class="screen hidden">
+            <div class="hero-emoji">🏆</div>
+            <h2>測驗完成！</h2>
+            <div class="result-score" id="final-score">0</div>
+            <div class="result-comment" id="final-comment">不錯喔！</div>
+            <button class="btn-primary" onclick="game.start()">再玩一次</button>
+        </div>
+    </div>
+
+    <script>
+        const questions = [
+            { word: "สวัสดี", correct: "你好", options: ["謝謝", "再見", "對不起"] },
+            { word: "ขอบคุณ", correct: "謝謝", options: ["好吃", "多少錢", "不要"] },
+            { word: "ขอโทษ", correct: "對不起", options: ["你好", "沒關係", "什麼"] },
+            { word: "ไม่เป็นไร", correct: "沒關係", options: ["去哪裡", "廁所", "非常"] },
+            { word: "กินข้าว", correct: "吃飯", options: ["喝水", "睡覺", "走路"] },
+            { word: "อร่อย", correct: "好吃", options: ["好玩", "漂亮", "生氣"] },
+            { word: "เท่าไหร่", correct: "多少錢", options: ["幾點", "誰", "為什麼"] },
+            { word: "ห้องน้ำ", correct: "廁所", options: ["房間", "廚房", "學校"] },
+            { word: "ไปไหน", correct: "去哪裡", options: ["做什麼", "怎麼走", "是誰"] },
+            { word: "ใช่", correct: "是的", options: ["不是", "沒有", "可以"] }
+        ];
+
+        class QuizGame {
+            constructor() {
+                this.score = 0;
+                this.currentQIndex = 0;
+                this.gameQuestions = [];
+                this.isBusy = false;
+
+                // DOM Elements
+                this.screens = {
+                    start: document.getElementById('start-screen'),
+                    quiz: document.getElementById('quiz-screen'),
+                    result: document.getElementById('result-screen')
+                };
+                this.els = {
+                    score: document.getElementById('score-display'),
+                    word: document.getElementById('q-word'),
+                    options: document.getElementById('options-container'),
+                    progress: document.getElementById('progress-fill'),
+                    finalScore: document.getElementById('final-score'),
+                    finalComment: document.getElementById('final-comment'),
+                    feedback: document.getElementById('feedback-msg')
+                };
+            }
+
+            start() {
+                // Reset
+                this.score = 0;
+                this.currentQIndex = 0;
+                this.els.score.innerText = 0;
+                
+                // Randomize and pick 5 questions
+                this.gameQuestions = [...questions]
+                    .sort(() => Math.random() - 0.5)
+                    .slice(0, 5);
+
+                this.switchScreen('quiz');
+                this.renderQuestion();
+            }
+
+            switchScreen(name) {
+                Object.values(this.screens).forEach(s => s.classList.add('hidden'));
+                this.screens[name].classList.remove('hidden');
+            }
+
+            renderQuestion() {
+                this.isBusy = false;
+                this.els.feedback.innerText = "";
+                this.els.feedback.style.color = "transparent";
+
+                const q = this.gameQuestions[this.currentQIndex];
+                
+                // Update UI
+                this.els.word.innerText = q.word;
+                const pct = ((this.currentQIndex) / this.gameQuestions.length) * 100;
+                this.els.progress.style.width = `${pct}%`;
+
+                // Prepare options
+                let allOptions = [...q.options, q.correct];
+                allOptions.sort(() => Math.random() - 0.5);
+
+                this.els.options.innerHTML = '';
+                allOptions.forEach(opt => {
+                    const btn = document.createElement('button');
+                    btn.className = 'option-btn';
+                    btn.innerText = opt;
+                    btn.onclick = () => this.checkAnswer(btn, opt, q.correct);
+                    this.els.options.appendChild(btn);
+                });
+            }
+
+            checkAnswer(btn, selected, correct) {
+                if (this.isBusy) return;
+                this.isBusy = true;
+
+                const buttons = this.els.options.querySelectorAll('button');
+                
+                if (selected === correct) {
+                    this.score += 20; // 5 questions, 20 pts each
+                    this.els.score.innerText = this.score;
+                    btn.classList.add('correct');
+                    this.showFeedback(true);
+                } else {
+                    btn.classList.add('wrong');
+                    // Highlight the correct one
+                    buttons.forEach(b => {
+                        if (b.innerText === correct) b.classList.add('correct');
+                    });
+                    this.showFeedback(false);
+                }
+
+                // Next question delay
+                setTimeout(() => {
+                    this.currentQIndex++;
+                    if (this.currentQIndex < this.gameQuestions.length) {
+                        this.renderQuestion();
+                    } else {
+                        this.endGame();
+                    }
+                }, 1200);
+            }
+
+            showFeedback(isCorrect) {
+                if(isCorrect) {
+                    this.els.feedback.innerText = "正確！ เก่งมาก (很棒)";
+                    this.els.feedback.style.color = "var(--correct)";
+                } else {
+                    this.els.feedback.innerText = "哎呀！記起來了嗎？";
+                    this.els.feedback.style.color = "var(--wrong)";
+                }
+            }
+
+            endGame() {
+                this.els.progress.style.width = '100%';
+                this.els.finalScore.innerText = this.score;
+                
+                let comment = "";
+                if (this.score === 100) comment = "太神了！泰國人是你？🐘🇹🇭";
+                else if (this.score >= 80) comment = "超厲害！幾乎全對！✨";
+                else if (this.score >= 60) comment = "還不錯，繼續加油！🔥";
+                else comment = "沒關係，多玩幾次就熟了！💪";
+                
+                this.els.finalComment.innerText = comment;
+                this.switchScreen('result');
+            }
+        }
+
+        const game = new QuizGame();
+    </script>
+</body>
+</html>
