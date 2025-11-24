@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แบบทดสอบการฟังภาษาไทย (Infinite)</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&family=Sarabun:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #2c3e50;
+            --accent: #d35400; /* 泰式奶茶色 */
+            --bg: #f5f6fa;
+            --card: #ffffff;
+            --correct: #27ae60;
+            --wrong: #c0392b;
+        }
+
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: var(--bg);
+            color: var(--primary);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 700px;
+            margin: 20px;
+            background: var(--card);
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        header {
+            background: var(--primary);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            position: relative;
+        }
+
+        header h1 {
+            margin: 0;
+            font-family: 'Prompt', sans-serif;
+            font-size: 1.4rem;
+        }
+
+        .score-board {
+            margin-top: 10px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        /* Content Area */
+        .content {
+            padding: 30px;
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Audio Button */
+        .audio-wrapper {
+            margin: 20px 0 40px 0;
+            position: relative;
+        }
+
+        .play-btn {
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+            box-shadow: 0 5px 15px rgba(211, 84, 0, 0.4);
+            transition: transform 0.2s, background 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .play-btn:active {
+            transform: scale(0.95);
+        }
+
+        .play-btn.playing {
+            background: #e67e22;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(230, 126, 34, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(230, 126, 34, 0); }
+        }
+
+        .instruction {
+            color: #7f8c8d;
+            margin-bottom: 20px;
+            font-style: italic;
+        }
+
+        /* Options */
+        .options-list {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .option-card {
+            background: white;
+            border: 2px solid #ecf0f1;
+            border-radius: 12px;
+            padding: 18px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            font-size: 1.1rem;
+            font-family: 'Prompt', sans-serif;
+        }
+
+        .option-card:hover {
+            border-color: var(--primary);
+            background: #f8f9fa;
+        }
+
+        .option-tag {
+            width: 30px;
+            height: 30px;
+            background: #ecf0f1;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-right: 15px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            color: #7f8c8d;
+        }
+
+        /* States */
+        .option-card.correct {
+            border-color: var(--correct);
+            background-color: #eafaf1;
+            color: var(--correct);
+        }
+        .option-card.correct .option-tag {
+            background-color: var(--correct);
+            color: white;
+        }
+
+        .option-card.wrong {
+            border-color: var(--wrong);
+            background-color: #fdeaea;
+            color: var(--wrong);
+        }
+        .option-card.wrong .option-tag {
+            background-color: var(--wrong);
+            color: white;
+        }
+
+        /* Result & Feedback */
+        .feedback-panel {
+            margin-top: 20px;
+            padding: 20px;
+            background: #f1f2f6;
+            border-radius: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            display: none;
+            animation: fadeIn 0.5s;
+        }
+
+        .script-text {
+            font-family: 'Prompt', sans-serif;
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .translation-text {
+            font-size: 0.95rem;
+            color: #666;
+            margin-bottom: 15px;
+        }
+
+        .next-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 50px;
+            font-size: 1rem;
+            cursor: pointer;
+            float: right;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <h1>🇹🇭 Thai Listening Infinite</h1>
+            <div class="score-board">Correct: <span id="score">0</span> | Round: <span id="round">1</span></div>
+        </header>
+
+        <div class="content">
+            <div class="instruction">ฟังบทสนทนาแล้วเลือกคำตอบที่ถูกต้อง (Listen and select the correct option)</div>
+            
+            <div class="audio-wrapper">
+                <button class="play-btn" id="playBtn" onclick="playAudio()">
+                    🔊
+                </button>
+            </div>
+
+            <div class="options-list" id="optionsContainer">
+                <!-- Options will be injected here -->
+            </div>
+
+            <div class="feedback-panel" id="feedbackPanel">
+                <div class="script-text" id="scriptText"></div>
+                <div class="translation-text" id="transText"></div>
+                <button class="next-btn" onclick="nextRound()">ข้อต่อไป (Next) ➜</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ----------------------------------------------------
+        // 1. 資料庫 (Vocabulary Database)
+        // ----------------------------------------------------
+        const vocab = {
+            locations: [
+                { th: "สนามบิน", en: "Airport", sound: "sa-nam-bin" },
+                { th: "โรงพยาบาล", en: "Hospital", sound: "rong-pa-ya-ban" },
+                { th: "ห้างสรรพสินค้า", en: "Department Store", sound: "hang-sap-pa-sin-kha" },
+                { th: "ตลาดน้ำ", en: "Floating Market", sound: "ta-lat-nam" },
+                { th: "สถานีรถไฟ", en: "Train Station", sound: "sa-tha-ni-rot-fai" },
+                { th: "โรงแรม", en: "Hotel", sound: "rong-raem" },
+                { th: "ร้านอาหาร", en: "Restaurant", sound: "ran-a-han" }
+            ],
+            times: [
+                { th: "แปดโมงเช้า", en: "8:00 AM", val: 8 },
+                { th: "สิบโมงครึ่ง", en: "10:30 AM", val: 10.5 },
+                { th: "บ่ายสองโมง", en: "2:00 PM", val: 14 },
+                { th: "หกโมงเย็น", en: "6:00 PM", val: 18 },
+                { th: "สองทุ่ม", en: "8:00 PM", val: 20 }
+            ],
+            prices: [
+                { th: "หนึ่งร้อยยี่สิบบาท", num: 120 },
+                { th: "สามร้อยห้าสิบบาท", num: 350 },
+                { th: "ห้าร้อยบาท", num: 500 },
+                { th: "หนึ่งพันสองร้อยบาท", num: 1200 },
+                { th: "แปดสิบบาท", num: 80 }
+            ],
+            items: [
+                { th: "กางเกงขายาว", en: "Long pants" },
+                { th: "เสื้อยืดสีขาว", en: "White T-shirt" },
+                { th: "รองเท้าผ้าใบ", en: "Sneakers" },
+                { th: "กระเป๋าเป้", en: "Backpack" },
+                { th: "นาฬิกาข้อมือ", en: "Wristwatch" }
+            ],
+            actions: [
+                { th: "ลืมไว้", en: "left/forgot" },
+                { th: "ซื้อมา", en: "bought" },
+                { th: "ทำหาย", en: "lost" }
+            ]
+        };
+
+        // ----------------------------------------------------
+        // 2. 題目生成器 (Generator Engine)
+        // ----------------------------------------------------
+        let currentQuestion = {};
+        let score = 0;
+        let round = 1;
+        let isAnswered = false;
+
+        // 生成隨機整數
+        const rand = (arr) => arr[Math.floor(Math.random() * arr.length)];
+        const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+
+        function generateQuestion() {
+            // 隨機決定題型：0=地點, 1=價格, 2=時間, 3=物品
+            const type = randInt(0, 3);
+            let q = {};
+
+            if (type === 0) { // --- 地點題 (Taxi/Travel) ---
+                const target = rand(vocab.locations);
+                const distractor1 = rand(vocab.locations);
+                const distractor2 = rand(vocab.locations);
+                
+                // 確保選項不重複
+                if(target === distractor1) return generateQuestion();
+
+                q = {
+                    script: [
+                        { role: 'A', text: "ขอโทษนะครับ, ช่วยไปส่งที่" + target.th + "หน่อยครับ" },
+                        { role: 'B', text: "ได้ค่ะ ขึ้นทางด่วนไหมคะ" },
+                        { role: 'A', text: "ไม่เป็นไรครับ ไปทางธรรมดาก็พอ" }
+                    ],
+                    question: "ผู้ชายต้องการไปที่ไหน?", // Man wants to go where?
+                    correct: target.th,
+                    options: [target.th, distractor1.th, distractor2.th, "กลับบ้าน"],
+                    translation: `A: Excuse me, please take me to ${target.en}.<br>B: OK. Highway?<br>A: No, normal road is fine.`
+                };
+            } 
+            else if (type === 1) { // --- 價格題 (Shopping) ---
+                const item = rand(vocab.items);
+                const price = rand(vocab.prices);
+                
+                // 產生錯誤的價格選項
+                let fakePrice1 = price.num + 100;
+                let fakePrice2 = price.num > 100 ? price.num - 50 : price.num + 20;
+
+                q = {
+                    script: [
+                        { role: 'B', text: "ใบนี้สวยจังเลยค่ะ, " + item.th + "ราคาเท่าไหร่คะ" },
+                        { role: 'A', text: "ตัวนี้ลดราคาอยู่ครับ เหลือแค่ " + price.th + " ครับ" },
+                        { role: 'B', text: "โอเคค่ะ งั้นเอาหนึ่งตัวค่ะ" }
+                    ],
+                    question: "สินค้าชิ้นนี้ราคาเท่าไหร่?", // How much is this item?
+                    correct: price.num + " บาท",
+                    options: [price.num + " บาท", fakePrice1 + " บาท", fakePrice2 + " บาท", "ไม่ขาย"],
+                    translation: `B: This ${item.en} is beautiful. How much?<br>A: It's on sale. Only ${price.num} Baht.<br>B: OK, I'll take one.`
+                };
+            }
+            else if (type === 2) { // --- 時間題 (Appointment) ---
+                const time = rand(vocab.times);
+                const otherTime = rand(vocab.times);
+                if(time === otherTime) return generateQuestion();
+
+                q = {
+                    script: [
+                        { role: 'A', text: "พรุ่งนี้เรามีประชุมตอนกี่โมงนะครับ" },
+                        { role: 'B', text: "ตอนแรกนัดไว้เก้าโมงค่ะ, แต่เลื่อนเป็น " + time.th + " ค่ะ" },
+                        { role: 'A', text: "รับทราบครับ เดี๋ยวเจอกันครับ" }
+                    ],
+                    question: "สรุปแล้วพวกเขาจะประชุมกี่โมง?", // What time is the meeting finally?
+                    correct: time.th,
+                    options: [time.th, "เก้าโมงเช้า", otherTime.th, "ยกเลิกประชุม"],
+                    translation: `A: What time is our meeting tomorrow?<br>B: First it was 9 AM, but moved to ${time.en}.<br>A: Acknowledged. See you.`
+                };
+            }
+            else { // --- 物品遺失題 (Lost Item) ---
+                const item = rand(vocab.items);
+                const loc = rand(vocab.locations);
+                const otherItem = rand(vocab.items);
+                
+                if(item === otherItem) return generateQuestion();
+
+                q = {
+                    script: [
+                        { role: 'B', text: "คุณคะ! ดูเหมือนคุณจะลืมของไว้นะคะ" },
+                        { role: 'A', text: "เอ๊ะ... " + item.th + "ของผมหายไปไหน" },
+                        { role: 'B', text: "นี่ค่ะ คุณลืมไว้ที่โต๊ะเมื่อกี้ค่ะ" },
+                        { role: 'A', text: "ขอบคุณมากครับ!" }
+                    ],
+                    question: "ผู้ชายลืมอะไรไว้?", // What did the man leave behind?
+                    correct: item.th,
+                    options: [item.th, otherItem.th, "กระเป๋าสตางค์", "โทรศัพท์มือถือ"],
+                    translation: `B: Sir! You seem to have forgotten something.<br>A: Eh... Where is my ${item.en}?<br>B: Here. You left it on the table.<br>A: Thank you so much!`
+                };
+            }
+
+            // 洗牌選項 (Shuffle Options)
+            q.options = q.options.sort(() => Math.random() - 0.5);
+            return q;
+        }
+
+        // ----------------------------------------------------
+        // 3. 語音合成系統 (Improved TTS)
+        // ----------------------------------------------------
+        const synth = window.speechSynthesis;
+        let voices = [];
+
+        // 載入聲音
+        window.speechSynthesis.onvoiceschanged = () => {
+            voices = synth.getVoices();
+        };
+
+        async function speakDialogue(script) {
+            document.getElementById('playBtn').classList.add('playing');
+            document.getElementById('playBtn').disabled = true;
+
+            for (let line of script) {
+                await speakLine(line.text, line.role);
+                // 增加行與行之間的自然停頓
+                await new Promise(r => setTimeout(r, 600)); 
+            }
+
+            document.getElementById('playBtn').classList.remove('playing');
+            document.getElementById('playBtn').disabled = false;
+        }
+
+        function speakLine(text, role) {
+            return new Promise((resolve) => {
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'th-TH';
+                
+                // 優先選擇泰語聲音
+                const thVoice = voices.find(v => v.lang.includes('th'));
+                if (thVoice) utter.voice = thVoice;
+
+                // 調整參數讓聲音有些微變化 (Humanize)
+                // 每次語速微調 +/- 0.05
+                const randomRate = (Math.random() * 0.1) - 0.05;
+
+                if (role === 'A') {
+                    // 男聲模擬 (低音)
+                    utter.pitch = 0.8 + (Math.random() * 0.1); 
+                    utter.rate = 0.9 + randomRate;
+                } else {
+                    // 女聲模擬 (高音)
+                    utter.pitch = 1.2 + (Math.random() * 0.1);
+                    utter.rate = 1.05 + randomRate;
+                }
+
+                utter.onend = resolve;
+                utter.onerror = resolve;
+                synth.speak(utter);
+            });
+        }
+
+        // ----------------------------------------------------
+        // 4. 遊戲控制邏輯 (Game Logic)
+        // ----------------------------------------------------
+        function initGame() {
+            round = 1;
+            score = 0;
+            updateScore();
+            loadRound();
+        }
+
+        function loadRound() {
+            isAnswered = false;
+            currentQuestion = generateQuestion();
+            
+            // UI Reset
+            document.getElementById('feedbackPanel').style.display = 'none';
+            document.getElementById('optionsContainer').innerHTML = '';
+            document.getElementById('round').innerText = round;
+            
+            // Render Options
+            const container = document.getElementById('optionsContainer');
+            const letters = ['ก', 'ข', 'ค', 'ง']; // 泰文 A, B, C, D
+
+            // 在顯示選項前，先添加題目問題 (Question Text)
+            const qHeader = document.createElement('h3');
+            qHeader.innerText = "คำถาม: " + currentQuestion.question;
+            qHeader.style.textAlign = 'center';
+            qHeader.style.marginBottom = '20px';
+            container.appendChild(qHeader);
+
+            currentQuestion.options.forEach((opt, idx) => {
+                const div = document.createElement('div');
+                div.className = 'option-card';
+                div.innerHTML = `<div class="option-tag">${letters[idx]}</div> ${opt}`;
+                div.onclick = () => checkAnswer(opt, div);
+                container.appendChild(div);
+            });
+
+            // Auto play slightly delayed
+            // setTimeout(() => playAudio(), 800);
+        }
+
+        function playAudio() {
+            if (synth.speaking) synth.cancel();
+            speakDialogue(currentQuestion.script);
+        }
+
+        function checkAnswer(selectedText, element) {
+            if (isAnswered) return;
+            isAnswered = true;
+
+            const isCorrect = selectedText === currentQuestion.correct;
+            
+            // UI Feedback
+            if (isCorrect) {
+                element.classList.add('correct');
+                score++;
+                updateScore();
+            } else {
+                element.classList.add('wrong');
+                // Highlight correct one
+                const cards = document.querySelectorAll('.option-card');
+                cards.forEach(card => {
+                    if (card.innerText.includes(currentQuestion.correct)) {
+                        card.classList.add('correct');
+                    }
+                });
+            }
+
+            // Show Script & Translation
+            const fbPanel = document.getElementById('feedbackPanel');
+            const scriptDiv = document.getElementById('scriptText');
+            const transDiv = document.getElementById('transText');
+            
+            let htmlScript = "";
+            currentQuestion.script.forEach(s => {
+                const color = s.role === 'A' ? '#2980b9' : '#d35400';
+                htmlScript += `<div style="color:${color}"><b>${s.role}:</b> ${s.text}</div>`;
+            });
+
+            scriptDiv.innerHTML = htmlScript;
+            transDiv.innerHTML = "<b>คำแปล (Translation):</b><br>" + currentQuestion.translation;
+            
+            fbPanel.style.display = 'block';
+        }
+
+        function nextRound() {
+            round++;
+            loadRound();
+        }
+
+        function updateScore() {
+            document.getElementById('score').innerText = score;
+        }
+
+        // Start
+        window.onload = initGame;
+
+    </script>
+</body>
+</html>
