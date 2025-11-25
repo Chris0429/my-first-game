@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>深海釣魚高手</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: 'Arial', sans-serif;
+            overflow: hidden;
+        }
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        canvas {
+            background: linear-gradient(to bottom, #87CEEB 0%, #1E90FF 30%, #000080 100%);
+            display: block;
+            border-radius: 8px;
+        }
+        #ui-layer {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 20px;
+            text-shadow: 2px 2px 2px black;
+            pointer-events: none;
+        }
+        #startScreen, #gameOverScreen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 10px;
+            display: none;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            background: #ffcc00;
+            border: none;
+            border-radius: 5px;
+            color: #333;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        button:hover {
+            background: #ffdb4d;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="ui-layer">
+        <div>分數: <span id="scoreDisplay">0</span></div>
+        <div>時間: <span id="timeDisplay">60</span>s</div>
+    </div>
+    
+    <!-- 開始畫面 -->
+    <div id="startScreen" style="display: block;">
+        <h1>深海釣魚高手</h1>
+        <p>按下空白鍵或點擊滑鼠發射魚鉤</p>
+        <p>紅色魚: 速度快 (30分)</p>
+        <p>黃色魚: 普通 (10分)</p>
+        <p>灰色魚: 垃圾 (-5分)</p>
+        <button onclick="startGame()">開始遊戲</button>
+    </div>
+
+    <!-- 結束畫面 -->
+    <div id="gameOverScreen">
+        <h1>時間到！</h1>
+        <p>最終分數: <span id="finalScore">0</span></p>
+        <button onclick="startGame()">再玩一次</button>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 遊戲狀態
+    let gameState = 'START'; // START, PLAYING, GAMEOVER
+    let score = 0;
+    let timeLeft = 60;
+    let lastTime = 0;
+    let fishTimer = 0;
+
+    // 遊戲物件配置
+    const boat = { x: 380, y: 50, width: 60, height: 30 };
+    const hook = {
+        x: 400,
+        y: 80,
+        originY: 80,
+        radius: 8,
+        speed: 8,
+        state: 'IDLE', // IDLE(閒置), DOWN(下沉), UP(拉回)
+        caughtFish: null
+    };
+
+    // 魚群陣列
+    let fishes = [];
+
+    // 魚的種類設定
+    const fishTypes = [
+        { color: '#FFD700', score: 10, speed: 2, radius: 15, name: 'Normal' }, // 黃色普通魚
+        { color: '#FF4500', score: 30, speed: 4, radius: 12, name: 'Fast' },   // 紅色快魚
+        { color: '#808080', score: -5, speed: 1.5, radius: 18, name: 'Trash' } // 垃圾
+    ];
+
+    // 輸入監聽
+    window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') launchHook();
+    });
+    canvas.addEventListener('mousedown', () => {
+        launchHook();
+    });
+
+    function launchHook() {
+        if (gameState === 'PLAYING' && hook.state === 'IDLE') {
+            hook.state = 'DOWN';
+        }
+    }
+
+    function startGame() {
+        score = 0;
+        timeLeft = 60;
+        fishes = [];
+        hook.state = 'IDLE';
+        hook.caughtFish = null;
+        hook.y = hook.originY;
+        gameState = 'PLAYING';
+        
+        document.getElementById('startScreen').style.display = 'none';
+        document.getElementById('gameOverScreen').style.display = 'none';
+        document.getElementById('scoreDisplay').innerText = score;
+        document.getElementById('timeDisplay').innerText = timeLeft;
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    function gameOver() {
+        gameState = 'GAMEOVER';
+        document.getElementById('finalScore').innerText = score;
+        document.getElementById('gameOverScreen').style.display = 'block';
+    }
+
+    // 生成魚
+    function spawnFish() {
+        const type = fishTypes[Math.floor(Math.random() * fishTypes.length)];
+        const direction = Math.random() > 0.5 ? 1 : -1;
+        const startX = direction === 1 ? -50 : canvas.width + 50;
+        
+        // 隨機深度 (海面以下)
+        const depth = Math.random() * (canvas.height - 200) + 150;
+
+        fishes.push({
+            x: startX,
+            y: depth,
+            type: type,
+            direction: direction,
+            active: true
+        });
+    }
+
+    // 碰撞檢測 (圓形)
+    function checkCollision(c1, c2) {
+        const dx = c1.x - c2.x;
+        const dy = c1.y - c2.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        return distance < c1.radius + c2.type.radius;
+    }
+
+    function update(deltaTime) {
+        if (gameState !== 'PLAYING') return;
+
+        // 更新時間
+        if (deltaTime) {
+            timeLeft -= deltaTime / 1000;
+            document.getElementById('timeDisplay').innerText = Math.ceil(timeLeft);
+            if (timeLeft <= 0) gameOver();
+        }
+
+        // 生成魚的邏輯
+        fishTimer += deltaTime;
+        if (fishTimer > 800) { // 每0.8秒嘗試生成
+            if (fishes.length < 10) spawnFish();
+            fishTimer = 0;
+        }
+
+        // 更新魚的位置
+        fishes.forEach(fish => {
+            if (fish.active) {
+                fish.x += fish.type.speed * fish.direction;
+                
+                // 移除超出畫面的魚
+                if ((fish.direction === 1 && fish.x > canvas.width + 50) || 
+                    (fish.direction === -1 && fish.x < -50)) {
+                    fish.active = false;
+                }
+            }
+        });
+        fishes = fishes.filter(f => f.active);
+
+        // 魚鉤邏輯
+        if (hook.state === 'DOWN') {
+            hook.y += hook.speed;
+            
+            // 檢測是否抓到魚
+            for (let fish of fishes) {
+                if (checkCollision({x: hook.x, y: hook.y, radius: hook.radius}, fish)) {
+                    hook.caughtFish = fish;
+                    hook.state = 'UP';
+                    fish.active = false; // 從一般魚群邏輯移除，改為跟隨鉤子
+                    break;
+                }
+            }
+
+            // 到底部自動拉回
+            if (hook.y >= canvas.height) {
+                hook.state = 'UP';
+            }
+        } else if (hook.state === 'UP') {
+            hook.y -= hook.speed;
+            
+            // 回到原點
+            if (hook.y <= hook.originY) {
+                hook.y = hook.originY;
+                hook.state = 'IDLE';
+                
+                // 結算分數
+                if (hook.caughtFish) {
+                    score += hook.caughtFish.type.score;
+                    document.getElementById('scoreDisplay').innerText = score;
+                    // 文字特效 (簡單實作)
+                    createScoreEffect(hook.caughtFish.type.score);
+                    hook.caughtFish = null;
+                }
+            }
+        }
+    }
+
+    // 簡單的分數特效
+    let effects = [];
+    function createScoreEffect(val) {
+        effects.push({
+            x: hook.x,
+            y: hook.y - 20,
+            text: val > 0 ? `+${val}` : `${val}`,
+            life: 30,
+            color: val > 0 ? '#fff' : '#ff4444'
+        });
+    }
+
+    function draw() {
+        // 清空畫布
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 繪製船
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(boat.x, boat.y, boat.width, boat.height);
+        // 船桿
+        ctx.beginPath();
+        ctx.moveTo(boat.x + boat.width, boat.y);
+        ctx.lineTo(hook.x, hook.originY); // 桿頭
+        ctx.strokeStyle = '#555';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+
+        // 繪製魚線
+        ctx.beginPath();
+        ctx.moveTo(hook.x, hook.originY);
+        ctx.lineTo(hook.x, hook.y);
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        // 繪製魚鉤
+        ctx.beginPath();
+        ctx.arc(hook.x, hook.y, hook.radius, 0, Math.PI, false);
+        ctx.strokeStyle = 'silver';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 繪製游泳的魚
+        fishes.forEach(fish => {
+            drawFish(fish.x, fish.y, fish.type.color, fish.direction, fish.type.radius);
+        });
+
+        // 繪製被釣到的魚
+        if (hook.caughtFish) {
+            // 魚跟著鉤子動，並且旋轉成垂直被釣起的樣子
+            drawFish(hook.x, hook.y + 15, hook.caughtFish.type.color, 0, hook.caughtFish.type.radius, true);
+        }
+
+        // 繪製特效
+        effects.forEach((eff, index) => {
+            ctx.fillStyle = eff.color;
+            ctx.font = 'bold 20px Arial';
+            ctx.fillText(eff.text, eff.x, eff.y);
+            eff.y -= 1;
+            eff.life--;
+        });
+        effects = effects.filter(e => e.life > 0);
+    }
+
+    function drawFish(x, y, color, direction, size, isCaught = false) {
+        ctx.save();
+        ctx.translate(x, y);
+        if (isCaught) {
+            ctx.rotate(Math.PI / 2); // 被釣起來時轉90度
+        } else {
+            ctx.scale(direction, 1); // 根據方向翻轉
+        }
+
+        ctx.fillStyle = color;
+        
+        // 魚身
+        ctx.beginPath();
+        ctx.ellipse(0, 0, size * 1.5, size, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 尾巴
+        ctx.beginPath();
+        ctx.moveTo(-size, 0);
+        ctx.lineTo(-size - 10, -size/2);
+        ctx.lineTo(-size - 10, size/2);
+        ctx.fill();
+
+        // 眼睛
+        ctx.fillStyle = 'white';
+        ctx.beginPath();
+        ctx.arc(size/2, -size/4, size/4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'black';
+        ctx.beginPath();
+        ctx.arc(size/2 + 2, -size/4, size/8, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+
+    function gameLoop(timestamp) {
+        if (!lastTime) lastTime = timestamp;
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
+
+        if (gameState === 'PLAYING') {
+            update(deltaTime);
+        }
+        draw();
+        
+        if (gameState !== 'GAMEOVER') {
+            requestAnimationFrame(gameLoop);
+        }
+    }
+</script>
+</body>
+</html>
