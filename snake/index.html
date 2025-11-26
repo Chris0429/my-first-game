@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>Neon Snake: Cyberpunk Edition</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: white;
+            user-select: none;
+        }
+
+        #gameCanvas {
+            display: block;
+            filter: blur(0.5px) contrast(1.2);
+        }
+
+        #ui-layer {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            pointer-events: none;
+        }
+
+        .hud-text {
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 0 0 10px #0ff;
+            color: #0ff;
+            margin-bottom: 10px;
+        }
+
+        #start-screen, #game-over-screen {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 40px;
+            border: 2px solid #0ff;
+            border-radius: 15px;
+            box-shadow: 0 0 30px rgba(0, 255, 255, 0.3);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        h1 {
+            font-size: 50px;
+            margin: 0;
+            background: linear-gradient(45deg, #f0f, #0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-shadow: 0 0 20px rgba(255, 255, 255, 0.5);
+            animation: pulse 2s infinite;
+        }
+
+        button {
+            background: transparent;
+            border: 2px solid #f0f;
+            color: #f0f;
+            padding: 15px 30px;
+            font-size: 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 0 10px #f0f;
+        }
+
+        button:hover {
+            background: #f0f;
+            color: white;
+            box-shadow: 0 0 30px #f0f;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .controls-hint {
+            font-size: 14px;
+            color: #aaa;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- UI Layer -->
+    <div id="ui-layer">
+        <div class="hud-text">SCORE: <span id="score">0</span></div>
+        <div class="hud-text" style="color: #f0f; text-shadow: 0 0 10px #f0f;">LENGTH: <span id="length">5</span></div>
+    </div>
+
+    <!-- Canvas -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Start Screen -->
+    <div id="start-screen">
+        <h1>NEON SNAKE</h1>
+        <div class="controls-hint">
+            WASD / 方向鍵移動<br>
+            SPACE (空白鍵) 按住衝刺 (消耗長度)
+        </div>
+        <button onclick="startGame()">START GAME</button>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="game-over-screen" class="hidden">
+        <h1 style="background: linear-gradient(45deg, #f00, #ff8800);">GAME OVER</h1>
+        <div class="hud-text">FINAL SCORE: <span id="final-score">0</span></div>
+        <button onclick="startGame()">RETRY</button>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    
+    // UI Elements
+    const scoreEl = document.getElementById('score');
+    const lengthEl = document.getElementById('length');
+    const finalScoreEl = document.getElementById('final-score');
+    const startScreen = document.getElementById('start-screen');
+    const gameOverScreen = document.getElementById('game-over-screen');
+
+    // Game Config
+    const GRID_SIZE = 20;
+    let TILE_COUNT_X = 0;
+    let TILE_COUNT_Y = 0;
+    
+    // Game State
+    let gameLoopId;
+    let score = 0;
+    let isGameOver = false;
+    let frameCount = 0;
+    let shakeIntensity = 0;
+    
+    // Objects
+    let snake = [];
+    let velocity = { x: 0, y: 0 };
+    let food = null;
+    let particles = [];
+    let bgGridOffset = 0;
+
+    // Inputs
+    let nextVelocity = { x: 0, y: 0 };
+    let isDashing = false;
+
+    // Resize Handling
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        TILE_COUNT_X = Math.floor(canvas.width / GRID_SIZE);
+        TILE_COUNT_Y = Math.floor(canvas.height / GRID_SIZE);
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    // --- Classes & Systems ---
+
+    class Particle {
+        constructor(x, y, color) {
+            this.x = x;
+            this.y = y;
+            this.color = color;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 3 + 1;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.life = 1.0;
+            this.decay = Math.random() * 0.03 + 0.02;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= this.decay;
+        }
+
+        draw(ctx) {
+            ctx.save();
+            ctx.globalAlpha = this.life;
+            ctx.fillStyle = this.color;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = this.color;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        }
+    }
+
+    // Food Types
+    const FOOD_TYPES = [
+        { type: 'normal', color: '#ff0055', score: 10, chance: 0.7 },
+        { type: 'gold', color: '#ffd700', score: 50, chance: 0.2 },
+        { type: 'blue', color: '#00ffff', score: 20, chance: 0.1 } // Speed/Slow functionality simplified to score for stability
+    ];
+
+    function spawnFood() {
+        let valid = false;
+        let x, y;
+        
+        while (!valid) {
+            x = Math.floor(Math.random() * TILE_COUNT_X);
+            y = Math.floor(Math.random() * TILE_COUNT_Y);
+            
+            valid = true;
+            for (let segment of snake) {
+                if (segment.x === x && segment.y === y) {
+                    valid = false;
+                    break;
+                }
+            }
+        }
+
+        const rand = Math.random();
+        let cumulative = 0;
+        let selectedType = FOOD_TYPES[0];
+        
+        for (let ft of FOOD_TYPES) {
+            cumulative += ft.chance;
+            if (rand < cumulative) {
+                selectedType = ft;
+                break;
+            }
+        }
+
+        food = { x, y, ...selectedType, pulse: 0 };
+    }
+
+    // --- Game Logic ---
+
+    function startGame() {
+        startScreen.classList.add('hidden');
+        gameOverScreen.classList.add('hidden');
+        
+        snake = [
+            { x: 10, y: 10 },
+            { x: 9, y: 10 },
+            { x: 8, y: 10 },
+            { x: 7, y: 10 },
+            { x: 6, y: 10 }
+        ];
+        velocity = { x: 1, y: 0 };
+        nextVelocity = { x: 1, y: 0 };
+        score = 0;
+        scoreEl.innerText = score;
+        lengthEl.innerText = snake.length;
+        isGameOver = false;
+        particles = [];
+        spawnFood();
+        
+        if (gameLoopId) cancelAnimationFrame(gameLoopId);
+        gameLoop();
+    }
+
+    function update() {
+        if (isGameOver) return;
+
+        // Apply input
+        // Prevent 180 degree turns
+        if (nextVelocity.x !== -velocity.x && nextVelocity.y !== -velocity.y) {
+            velocity = { ...nextVelocity };
+        } else if (velocity.x === 0 && velocity.y === 0) {
+             velocity = { ...nextVelocity };
+        }
+
+        const head = { x: snake[0].x + velocity.x, y: snake[0].y + velocity.y };
+
+        // Dash logic (Dash spends length to move faster, simplified here to just visual speed or frame skipping logic could be added)
+        // For this demo, dash just makes the game update slightly faster or purely visual.
+        // Let's make dash skip a frame wait effectively (speed up).
+        
+        // Wall Collision
+        if (head.x < 0 || head.x >= TILE_COUNT_X || head.y < 0 || head.y >= TILE_COUNT_Y) {
+            endGame();
+            return;
+        }
+
+        // Self Collision
+        for (let i = 0; i < snake.length; i++) {
+            if (head.x === snake[i].x && head.y === snake[i].y) {
+                endGame();
+                return;
+            }
+        }
+
+        snake.unshift(head);
+
+        // Eat Food
+        if (head.x === food.x && head.y === food.y) {
+            score += food.score;
+            scoreEl.innerText = score;
+            lengthEl.innerText = snake.length;
+            
+            // Explosion
+            for (let i = 0; i < 20; i++) {
+                particles.push(new Particle(
+                    head.x * GRID_SIZE + GRID_SIZE/2, 
+                    head.y * GRID_SIZE + GRID_SIZE/2, 
+                    food.color
+                ));
+            }
+            
+            // Screen bump
+            shakeIntensity = 5;
+            
+            spawnFood();
+        } else {
+            // Dash cost mechanics
+            if (isDashing && snake.length > 3 && frameCount % 5 === 0) {
+                // Drop tail for speed (effect simulated by not growing, here we shrink)
+                snake.pop();
+                // Create dust
+                particles.push(new Particle(
+                    snake[snake.length-1].x * GRID_SIZE, 
+                    snake[snake.length-1].y * GRID_SIZE, 
+                    '#fff'
+                ));
+            } 
+            
+            // Normal movement removal
+            if (snake.length > score / 10 + 5) { // Simple growth rule override
+                 // Actually standard snake logic: remove tail if not eating
+                 snake.pop();
+            }
+        }
+        
+        lengthEl.innerText = snake.length;
+    }
+
+    function draw() {
+        // Clear with trails
+        ctx.fillStyle = 'rgba(5, 5, 5, 0.3)'; // Trail effect
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Screen Shake
+        let shakeX = 0, shakeY = 0;
+        if (shakeIntensity > 0) {
+            shakeX = (Math.random() - 0.5) * shakeIntensity;
+            shakeY = (Math.random() - 0.5) * shakeIntensity;
+            shakeIntensity *= 0.9;
+            if (shakeIntensity < 0.5) shakeIntensity = 0;
+        }
+        
+        ctx.save();
+        ctx.translate(shakeX, shakeY);
+
+        // Draw Background Grid (Cyberpunk style)
+        ctx.strokeStyle = '#001133';
+        ctx.lineWidth = 1;
+        bgGridOffset = (bgGridOffset + 0.5) % GRID_SIZE;
+        
+        ctx.beginPath();
+        for (let x = 0; x <= canvas.width; x += GRID_SIZE) {
+            ctx.moveTo(x, 0);
+            ctx.lineTo(x, canvas.height);
+        }
+        for (let y = bgGridOffset - GRID_SIZE; y <= canvas.height; y += GRID_SIZE) {
+            ctx.moveTo(0, y);
+            ctx.lineTo(canvas.width, y);
+        }
+        ctx.stroke();
+
+        // Draw Food
+        if (food) {
+            food.pulse += 0.1;
+            const size = GRID_SIZE/2 + Math.sin(food.pulse) * 3;
+            
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = food.color;
+            ctx.fillStyle = food.color;
+            
+            ctx.beginPath();
+            ctx.arc(
+                food.x * GRID_SIZE + GRID_SIZE/2, 
+                food.y * GRID_SIZE + GRID_SIZE/2, 
+                size, 0, Math.PI * 2
+            );
+            ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // Draw Snake
+        snake.forEach((segment, index) => {
+            const isHead = index === 0;
+            
+            // Rainbow hue for body
+            const hue = (frameCount * 2 + index * 10) % 360;
+            const color = isHead ? '#ffffff' : `hsl(${hue}, 100%, 50%)`;
+            
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = color;
+            ctx.fillStyle = color;
+
+            const px = segment.x * GRID_SIZE;
+            const py = segment.y * GRID_SIZE;
+
+            if (isHead) {
+                ctx.fillRect(px, py, GRID_SIZE, GRID_SIZE);
+                // Eyes
+                ctx.fillStyle = 'black';
+                ctx.fillRect(px + 4, py + 4, 4, 4);
+                ctx.fillRect(px + 12, py + 4, 4, 4);
+            } else {
+                // Make body slightly smaller
+                const shrink = 2;
+                ctx.fillRect(px + shrink, py + shrink, GRID_SIZE - shrink*2, GRID_SIZE - shrink*2);
+            }
+        });
+
+        // Draw Particles
+        particles.forEach((p, index) => {
+            p.update();
+            p.draw(ctx);
+            if (p.life <= 0) particles.splice(index, 1);
+        });
+        
+        ctx.restore();
+    }
+
+    function endGame() {
+        isGameOver = true;
+        shakeIntensity = 20;
+        draw(); // Draw one last time with shake
+        setTimeout(() => {
+            finalScoreEl.innerText = score;
+            gameOverScreen.classList.remove('hidden');
+        }, 500);
+    }
+
+    // Game Loop
+    let lastTime = 0;
+    const baseSpeed = 1000 / 15; // 15 FPS base
+
+    function gameLoop(timestamp) {
+        if (!timestamp) timestamp = 0;
+        const speed = isDashing ? baseSpeed / 2.5 : baseSpeed;
+        
+        if (timestamp - lastTime > speed) {
+            update();
+            lastTime = timestamp;
+            frameCount++;
+        }
+        
+        draw(); // Draw every frame for smooth particles/animations even if logic is grid-based
+        
+        if (!isGameOver) {
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+    }
+
+    // Controls
+    window.addEventListener('keydown', e => {
+        switch(e.key) {
+            case 'ArrowUp':
+            case 'w':
+            case 'W':
+                if (velocity.y !== 1) nextVelocity = { x: 0, y: -1 };
+                break;
+            case 'ArrowDown':
+            case 's':
+            case 'S':
+                if (velocity.y !== -1) nextVelocity = { x: 0, y: 1 };
+                break;
+            case 'ArrowLeft':
+            case 'a':
+            case 'A':
+                if (velocity.x !== 1) nextVelocity = { x: -1, y: 0 };
+                break;
+            case 'ArrowRight':
+            case 'd':
+            case 'D':
+                if (velocity.x !== -1) nextVelocity = { x: 1, y: 0 };
+                break;
+            case ' ':
+                isDashing = true;
+                break;
+        }
+    });
+
+    window.addEventListener('keyup', e => {
+        if (e.key === ' ') {
+            isDashing = false;
+        }
+    });
+
+</script>
+</body>
+</html>
